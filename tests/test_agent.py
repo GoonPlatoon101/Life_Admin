@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from agent import Agent
 from config import Config, load_config
+from schemas import SourceItem
 
 
 class FakeCompletions:
@@ -62,6 +63,7 @@ class AgentTests(unittest.TestCase):
                             "category": "task",
                             "summary": "Send an update to Alex by Friday.",
                             "recommended_next_action": "Draft and send the update.",
+                            "due_date": "2026-06-27",
                             "priority": "medium",
                             "confidence": 0.91,
                             "source_reasoning": "The source explicitly asks for an update.",
@@ -98,6 +100,7 @@ class AgentTests(unittest.TestCase):
                             "category": "task",
                             "summary": "There may be a deadline.",
                             "recommended_next_action": "Verify the deadline.",
+                            "due_date": "",
                             "priority": "medium",
                             "confidence": 0.7,
                             "source_reasoning": "The source is ambiguous.",
@@ -114,6 +117,95 @@ class AgentTests(unittest.TestCase):
 
         self.assertIn('"status": "needs_review"', response)
         self.assertIn('"needs_review": true', response)
+
+    def test_agent_keeps_work_coordination_email_when_filter_marks_it_irrelevant(self):
+        client = FakeClient(
+            [
+                {"is_relevant": False, "reason": "This is a work coordination message about a presentation deck.", "confidence": 0.91},
+                {
+                    "categories": ["task", "meeting"],
+                    "primary_category": "task",
+                    "reason": "It includes a work task tied to a meeting.",
+                    "confidence": 0.92,
+                },
+                {
+                    "items": [
+                        {
+                            "title": "Update the presentation deck",
+                            "category": "task",
+                            "summary": "Prepare the presentation deck before the planning meeting.",
+                            "recommended_next_action": "Update the deck and send the latest version before the planning meeting.",
+                            "due_date": "2026-06-27",
+                            "priority": "high",
+                            "confidence": 0.93,
+                            "source_reasoning": "The email asks for deck updates before a meeting.",
+                            "needs_review": False,
+                        }
+                    ]
+                },
+                {
+                    "items": [
+                        {
+                            "title": "Prepare for the planning meeting",
+                            "category": "meeting",
+                            "summary": "The presentation deck needs to be ready for the planning meeting.",
+                            "recommended_next_action": "Bring the updated deck to the planning meeting.",
+                            "due_date": "2026-06-27",
+                            "priority": "medium",
+                            "confidence": 0.9,
+                            "source_reasoning": "Meeting preparation is explicitly implied.",
+                            "needs_review": False,
+                        }
+                    ]
+                },
+            ]
+        )
+        agent = Agent(config=self._config(), client=client, system_prompt="System prompt")
+
+        result = agent.process_source_item(
+            SourceItem(content="Please update the presentation deck and have it ready before the planning meeting.")
+        )
+
+        self.assertEqual(result["final_output"]["status"], "saved")
+        self.assertEqual(len(result["final_output"]["items"]), 2)
+        self.assertEqual(len(client.chat.completions.calls), 4)
+
+    def test_agent_uses_fallback_categories_when_classification_returns_noise(self):
+        client = FakeClient(
+            [
+                {"is_relevant": True, "reason": "Contains project coordination.", "confidence": 0.86},
+                {
+                    "categories": ["noise"],
+                    "primary_category": "noise",
+                    "reason": "Work coordination message.",
+                    "confidence": 0.78,
+                },
+                {
+                    "items": [
+                        {
+                            "title": "Send project status update",
+                            "category": "task",
+                            "summary": "Send the project status update by Friday.",
+                            "recommended_next_action": "Prepare and send the project status update by Friday.",
+                            "due_date": "2026-06-27",
+                            "priority": "high",
+                            "confidence": 0.9,
+                            "source_reasoning": "The request is explicit in the email.",
+                            "needs_review": False,
+                        }
+                    ]
+                },
+            ]
+        )
+        agent = Agent(config=self._config(), client=client, system_prompt="System prompt")
+
+        result = agent.process_source_item(
+            SourceItem(content="Please send the project status update by Friday.")
+        )
+
+        self.assertEqual(result["final_output"]["status"], "saved")
+        self.assertEqual(result["final_output"]["items"][0]["title"], "Send project status update")
+        self.assertEqual(len(client.chat.completions.calls), 3)
 
     def test_load_config_reads_env_file(self):
         old_values = {

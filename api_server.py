@@ -11,6 +11,7 @@ from urllib.parse import unquote
 from life_admin.integrations.email.http import EmailProviderError
 from life_admin.scanner import EmailScanRequest, scan_email_messages
 from life_admin.scanner.email_agent_runner import (
+    agent_result_diagnostics,
     dashboard_update_from_agent_results,
     process_email_source_items,
 )
@@ -90,11 +91,16 @@ class LifeAdminHandler(BaseHTTPRequestHandler):
                 source_items,
                 seen_keys=SEEN_EMAIL_KEYS,
             )
+            dashboard_update = dashboard_update_from_agent_results(agent_results)
+            diagnostics = agent_result_diagnostics(agent_results)
             result = {
                 "source_items": source_items,
                 "agent_results": agent_results,
                 "processed_count": len(agent_results),
-                **dashboard_update_from_agent_results(agent_results),
+                "dashboard_item_count": len(dashboard_update["dashboard_items"]),
+                "dashboard_news_count": len(dashboard_update["dashboard_news"]),
+                **dashboard_update,
+                **diagnostics,
             }
         except ValueError as exc:
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)

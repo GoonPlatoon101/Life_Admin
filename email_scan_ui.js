@@ -221,6 +221,7 @@
   function renderProcessedPreview(result) {
     const items = result.dashboard_items || [];
     const stories = result.dashboard_news || [];
+    const diagnostics = result.diagnostics || [];
     const rows = items.map((item) => `
       <article class="email-source-card">
         <strong>${escapeHtml(item.title || "Email item")}</strong>
@@ -235,17 +236,29 @@
         <span>${escapeHtml((story.detail || "").slice(0, 220))}</span>
       </article>
     `).join("");
+    const diagnosticRows = diagnostics.map((entry) => `
+      <article class="email-source-card">
+        <strong>${escapeHtml(entry.source_id || "email")}</strong>
+        <span>${escapeHtml(entry.status || "unknown")} - ${escapeHtml(String(entry.item_count || 0))} item(s)</span>
+        <span>${escapeHtml(entry.reason || "No explicit reason returned by the agent.")}</span>
+      </article>
+    `).join("");
     const processedRows = rows + newsRows;
+    const createdItemCount = Number(result.dashboard_item_count || items.length || 0);
+    const createdNewsCount = Number(result.dashboard_news_count || stories.length || 0);
+    const emptyResultCount = Number(result.empty_result_count || 0);
 
     state.preview.innerHTML = `
       <div class="email-scan-head">
         <div>
           <p class="eyebrow">AI processing result</p>
           <h2>${result.processed_count || 0} email updates processed</h2>
+          <p class="empty-state">${createdItemCount} dashboard item(s), ${createdNewsCount} news item(s), ${emptyResultCount} empty result(s).</p>
         </div>
         <button class="drawer-close" type="button" id="closeEmailPreview" title="Close">x</button>
       </div>
       ${processedRows || '<p class="empty-state">No new dashboard items were created from this scan.</p>'}
+      ${diagnosticRows ? `<div class="email-scan-body"><p class="eyebrow">Per-email outcome</p>${diagnosticRows}</div>` : ""}
     `;
     state.preview.classList.add("open");
     state.preview.querySelector("#closeEmailPreview").addEventListener("click", () => {
@@ -279,6 +292,9 @@
       if (!response.ok) throw new Error(result.detail || result.error || "Email scan failed.");
       closeModal();
       state.lastScanResult = result;
+      if (window.LifeAdminDashboard?.registerEmailScan) {
+        window.LifeAdminDashboard.registerEmailScan(result);
+      }
       renderScanPreview(result);
       showToast(`Read-only scan returned ${result.count} email source item${result.count === 1 ? "" : "s"}.`);
     } catch (error) {
@@ -313,7 +329,7 @@
       if (window.LifeAdminDashboard?.addAgentDashboardUpdate) {
         window.LifeAdminDashboard.addAgentDashboardUpdate(result);
       }
-      showToast(`AI processed ${result.processed_count || 0} email update${result.processed_count === 1 ? "" : "s"}.`);
+      showToast(`AI processed ${result.processed_count || 0} email update${result.processed_count === 1 ? "" : "s"} and created ${result.dashboard_item_count || 0} dashboard item${result.dashboard_item_count === 1 ? "" : "s"}.`);
     } catch (error) {
       showToast(error.message || "Email processing failed.");
       if (processButton) {

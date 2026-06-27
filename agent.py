@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any
 
 from openai import OpenAI
@@ -48,9 +49,10 @@ class Agent:
 
     def process_source_item(self, source_item: SourceItem) -> dict[str, Any]:
         state = AgentRunState(source_item=source_item, limits=self.limits)
+        fallback_categories = self._fallback_categories(source_item.content)
 
         filtered = self._call_tool(state, "filter_content", filter_content, source_item)
-        if not filtered.get("is_relevant", False):
+        if not filtered.get("is_relevant", False) and not fallback_categories:
             return self._finish(
                 state,
                 "completed",
@@ -63,7 +65,8 @@ class Agent:
 
         classification = self._call_tool(state, "classify_content", classify_content, source_item)
         categories = self._extract_categories(classification)
-        if not categories or "noise" in categories or "uncertain" in categories:
+        effective_categories = self._effective_categories(categories, fallback_categories)
+        if not effective_categories:
             output = mark_needs_review(
                 classification.get("reason", "Classification was uncertain."),
             )
@@ -71,9 +74,9 @@ class Agent:
             return self._finish(state, "needs_review", output)
 
         extracted_items: list[dict[str, Any]] = []
-        extraction_tools = self._select_extraction_tools(categories)
+        extraction_tools = self._select_extraction_tools(effective_categories)
         if not extraction_tools:
-            output = mark_needs_review(f"No extraction tool available for categories: {categories}")
+            output = mark_needs_review(f"No extraction tool available for categories: {effective_categories}")
             state.add_tool_call("mark_needs_review", output)
             return self._finish(state, "needs_review", output)
 
@@ -151,3 +154,101 @@ class Agent:
         if "news" in categories:
             selected.append(("extract_news_items", extract_news_items))
         return selected
+
+    def _effective_categories(self, categories: list[str], fallback_categories: list[str]) -> list[str]:
+        normalized = [str(category).strip().lower() for category in categories if str(category).strip()]
+        meaningful = [category for category in normalized if category not in {"noise", "uncertain"}]
+        if meaningful:
+            return list(dict.fromkeys(meaningful + fallback_categories))
+        if fallback_categories:
+            return fallback_categories
+        return []
+
+    def _fallback_categories(self, content: str) -> list[str]:
+        text = content.lower()
+        categories: list[str] = []
+
+        if self._contains_any(
+            text,
+            (
+                "reply",
+                "respond",
+                "get back",
+                "confirm",
+                "approve",
+                "send back",
+            ),
+        ):
+            categories.append("reply_needed")
+
+        if self._contains_any(
+            text,
+            (
+                "meeting",
+                "call",
+                "agenda",
+                "planning",
+                "sync",
+                "standup",
+                "review meeting",
+            ),
+        ):
+            categories.append("meeting")
+
+        if self._contains_any(
+            text,
+            (
+                "task",
+                "todo",
+                "follow up",
+                "follow-up",
+                "send ",
+                "prepare",
+                "update the deck",
+                "presentation",
+                "slides",
+                "deck",
+                "status update",
+                "final numbers",
+                "project update",
+                "report",
+                "document",
+            ),
+        ):
+            categories.append("task")
+
+        if self._contains_any(
+            text,
+            (
+                "deadline",
+                "due",
+                "by friday",
+                "by monday",
+                "before ",
+                "tomorrow",
+                "today",
+                "eod",
+                "end of day",
+                "3pm",
+                "4pm",
+                "5pm",
+            ),
+        ) or re.search(r"\bby\s+\d{1,2}(:\d{2})?\s?(am|pm)\b", text):
+            categories.append("deadline")
+
+        if self._contains_any(
+            text,
+            (
+                "newsletter",
+                "announcement",
+                "digest",
+                "update available",
+                "release notes",
+            ),
+        ):
+            categories.append("news")
+
+        return list(dict.fromkeys(categories))
+
+    def _contains_any(self, text: str, needles: tuple[str, ...]) -> bool:
+        return any(needle in text for needle in needles)

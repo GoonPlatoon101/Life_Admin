@@ -1,111 +1,13 @@
-const taskExamples = [
-  ["Send revised vendor contract notes", "Maya Chen", "Email from Legal", "Due 11:30", "2026-06-27", "2026-06-27", "high", 0.91, "Legal asked for confirmation on the redline notes before the supplier call.", "Review the attached redlines and confirm whether clause 8 can stay as proposed."],
-  ["Add demo accounts to QA checklist", "Product", "Meeting follow-up", "Due EOD", "2026-06-27", "2026-06-27", "medium", 0.93, "The team agreed demo accounts should include both empty and busy inbox states.", "Create checklist entries for first-run, power-user, and expired-token scenarios."],
-  ["Confirm booth setup requirements", "Events Team", "Outlook thread", "Due today", "2026-06-27", "2026-06-27", "medium", 0.89, "The organizer needs final confirmation on table size, power sockets, and arrival time.", "Reply with the two-person setup and request one power extension."],
-  ["Upload updated pitch deck", "Alicia Tan", "Gmail thread", "Due 16:00", "2026-06-27", "2026-06-27", "high", 0.94, "Alicia asked for the deck with the latest product screenshots before judging starts.", "Export the current deck and upload the final PDF to the shared folder."],
-  ["Check OAuth consent copy", "Security Review", "Outlook inbox", "Due tomorrow", "2026-06-26", "2026-06-28", "high", 0.86, "The review note flags unclear consent copy for Gmail and Outlook access.", "Confirm the app says read-only access and no external writes."],
-  ["Send meal preference count", "Hackathon Ops", "Gmail thread", "Due today", "2026-06-27", "2026-06-27", "low", 0.82, "Ops asked teams to confirm dietary restrictions for Sunday dinner.", "Send the count for vegetarian and no-restriction meals."],
-  ["Prepare fallback demo script", "Team Chat Export", "Meeting follow-up", "Due tonight", "2026-06-27", "2026-06-27", "medium", 0.9, "The team wants a backup script if live account sync is unavailable.", "Write a two-minute walkthrough using the seeded Gmail and Outlook examples."],
-  ["Review dashboard empty states", "Design Notes", "Outlook thread", "Due this week", "2026-06-25", "2026-06-29", "low", 0.78, "Design feedback mentions the queue should look useful when filters return no results.", "Add concise empty state copy for search and filter combinations."],
-  ["Finalize judging one-liner", "Mentor Feedback", "Gmail thread", "Due today", "2026-06-27", "2026-06-27", "medium", 0.87, "A mentor suggested tightening the product explanation for non-technical judges.", "Use the read-only admin dashboard phrasing in the opening."],
-  ["Verify Outlook sample import", "Engineering", "Outlook inbox", "Due 14:30", "2026-06-27", "2026-06-27", "high", 0.88, "The sample inbox export includes duplicates from a forwarded thread.", "Deduplicate by message subject and latest timestamp before the demo."],
-  ["Collect teammate availability", "Team Coordinator", "Calendar invite", "Due tomorrow", "2026-06-26", "2026-06-28", "low", 0.8, "The team needs final availability for the post-hackathon cleanup slot.", "Ask each teammate to mark Sunday evening availability."],
-  ["Update README demo instructions", "Engineering", "Repository note", "Due this week", "2026-06-25", "2026-06-30", "medium", 0.92, "The README should mention that the prototype runs as a static file.", "Add browser-open instructions and clarify there are no external writes."],
-  ["Confirm logo usage", "Sponsor Team", "Sponsor email", "Due today", "2026-06-27", "2026-06-27", "low", 0.76, "The sponsor email includes logo placement rules for demo slides.", "Check whether the sponsor slide needs the latest logo lockup."],
-  ["Review user approval copy", "Product notes", "Due tomorrow", "2026-06-27", "2026-06-28", "medium", 0.85, "The approval copy should make it clear the AI does not take action automatically.", "Replace vague automation wording with explicit review-first language."],
-  ["Send final attendance confirmation", "Hackathon Admin", "Gmail thread", "Due 18:00", "2026-06-27", "2026-06-27", "high", 0.9, "Admin requested final confirmation that all team members are onsite.", "Reply with the full team list and arrival status."]
-];
-
-const meetingExamples = [
-  ["Investor sync", "2:00 PM", "Maya Chen", "Calendar", "Starts in 3h", "2026-06-26", "2026-06-27", "medium", 0.84, "Calendar description mentions traction, roadmap, and risk register.", "Bring adoption metric, MVP scope, and the read-only safety model."],
-  ["Design review", "Monday", "Priya Shah", "Outlook calendar", "This week", "2026-06-25", "2026-06-29", "medium", 0.82, "The review agenda asks for dashboard polish and mobile behavior.", "Open with the settings panel and filter interaction changes."],
-  ["Supplier call", "Tomorrow 10:00", "Vendor Ops", "Outlook invite", "Tomorrow", "2026-06-27", "2026-06-28", "high", 0.8, "The supplier wants to resolve contract clause 8 before procurement review.", "Bring the legal redlines and decision owner."],
-  ["Mentor office hours", "Today 15:30", "Hackathon Mentor", "Calendar", "Starts soon", "2026-06-27", "2026-06-27", "medium", 0.87, "Mentor asked teams to show the core workflow quickly.", "Demo the queue, settings, and review-first constraints."],
-  ["Engineering standup", "Today 12:45", "Dev Team", "Calendar", "Due today", "2026-06-27", "2026-06-27", "low", 0.9, "The invite asks each person to share blockers and demo risks.", "Mention browser-only prototype and seeded examples."],
-  ["Security check-in", "Tuesday", "Security Advisor", "Outlook calendar", "This week", "2026-06-26", "2026-06-30", "high", 0.79, "Agenda covers OAuth, data retention, and external action controls.", "Bring the privacy settings and read-only defaults."],
-  ["Product critique", "Wednesday", "Product Mentor", "Calendar", "This week", "2026-06-25", "2026-07-01", "medium", 0.83, "The mentor wants to see the target user and problem framing.", "Prepare the scattered-admin workflow example."],
-  ["Demo rehearsal", "Today 20:00", "Full Team", "Calendar", "Due today", "2026-06-27", "2026-06-27", "high", 0.95, "The team scheduled a full run-through before judging.", "Use the same sample account and reset filters before starting."],
-  ["Data model review", "Thursday", "Backend Team", "Outlook calendar", "This week", "2026-06-24", "2026-07-02", "low", 0.81, "The meeting covers SourceItem, Task, NewsItem, and AgentRun fields.", "Bring entity names from the contributor guide."],
-  ["Sponsor feedback", "Friday", "Sponsor Panel", "Calendar", "This week", "2026-06-23", "2026-07-03", "medium", 0.77, "Sponsors will ask how this differs from a standard todo app.", "Explain inbox/calendar extraction and human approval."],
-  ["UX polish pass", "Today 17:15", "Design Team", "Calendar", "Due today", "2026-06-27", "2026-06-27", "medium", 0.88, "The invite highlights spacing, dark mode, and click feedback.", "Review top cards, settings panel, and filter compactness."],
-  ["Integration planning", "Monday", "Platform Team", "Outlook calendar", "This week", "2026-06-26", "2026-06-29", "medium", 0.8, "The agenda compares Gmail and Outlook read-only APIs.", "List scopes needed for inbox and calendar extraction."],
-  ["Judge Q&A prep", "Today 21:00", "Full Team", "Calendar", "Due today", "2026-06-27", "2026-06-27", "high", 0.93, "The team will rehearse likely technical and product questions.", "Prepare answers on safety, confidence thresholds, and integrations."],
-  ["Ops handoff", "Sunday", "Hackathon Ops", "Outlook calendar", "This week", "2026-06-27", "2026-06-28", "low", 0.74, "Ops wants teams to know booth cleanup and equipment return timing.", "Add cleanup reminder after the demo."],
-  ["Post-demo retrospective", "Next week", "Team", "Calendar", "This week", "2026-06-24", "2026-07-04", "low", 0.72, "The invite is tentative but asks for notes on what to build after MVP.", "Capture feedback about real integrations and approval flows."]
-];
-
-const reviewExamples = [
-  ["Unclear deadline in NUS incubator email", "NUS Enterprise", "Newsletter", "Review today", "2026-06-24", "2026-06-30", "medium", 0.62, "The message references application materials but does not clearly state if the date applies to this track.", "Confirm whether the 30 Jun deadline is relevant before saving as a task."],
-  ["Ambiguous sponsor deliverable", "Sponsor Team", "Gmail thread", "Review today", "2026-06-27", "2026-06-27", "high", 0.58, "The sponsor asks for a summary but may mean either slides or a written brief.", "Ask which format they expect before creating a task."],
-  ["Possible duplicate vendor follow-up", "Procurement", "Outlook inbox", "Review today", "2026-06-27", "2026-06-27", "medium", 0.66, "Two similar threads mention the same contract follow-up.", "Check whether one is a forwarded copy before saving both."],
-  ["Low-confidence calendar prep note", "Calendar", "Meeting description", "Review this week", "2026-06-25", "2026-06-29", "low", 0.61, "The meeting description is short and the agenda is inferred from the title.", "Confirm whether prep notes are useful or should be dismissed."],
-  ["Newsletter may contain grant deadline", "Startup Digest", "Gmail newsletter", "Review this week", "2026-06-24", "2026-07-02", "medium", 0.64, "The digest mentions grants but the deadline may apply only to another region.", "Open the source before creating a deadline task."],
-  ["Unclear attendee ownership", "Calendar", "Invite update", "Review today", "2026-06-27", "2026-06-27", "low", 0.6, "The invite asks for someone to bring metrics but does not name the owner.", "Assign an owner manually if the item matters."],
-  ["Possible stale design comment", "Design Review", "Outlook thread", "Review this week", "2026-06-23", "2026-06-30", "low", 0.68, "The comment references an older layout that may no longer exist.", "Check whether the feedback still applies."],
-  ["Conflicting judging time", "Hackathon Admin", "Gmail inbox", "Review today", "2026-06-27", "2026-06-27", "high", 0.55, "One email says 4:30 PM while the calendar invite says 5:00 PM.", "Confirm the official judging time before updating the team."],
-  ["Uncertain priority from mentor note", "Mentor", "Notes import", "Review today", "2026-06-27", "2026-06-27", "medium", 0.63, "The mentor note says important but lacks a deadline.", "Decide whether this belongs in tasks or product backlog."],
-  ["Possible private data in sample", "Demo Data", "Outlook export", "Review this week", "2026-06-26", "2026-06-29", "high", 0.59, "A sample message may include a real phone number.", "Mask personal details before presenting."],
-  ["Unclear action in onboarding email", "Cloud Provider", "Gmail inbox", "Review tomorrow", "2026-06-27", "2026-06-28", "medium", 0.67, "The email includes setup steps but not all are needed for the MVP.", "Choose which setup tasks matter for the demo."],
-  ["Meeting follow-up lacks source", "Team Notes", "Manual note", "Review this week", "2026-06-24", "2026-07-01", "low", 0.57, "The follow-up item was copied from notes without a linked meeting.", "Add a source or dismiss it."],
-  ["Potentially outdated API note", "Engineering", "Gmail thread", "Review this week", "2026-06-22", "2026-06-30", "medium", 0.65, "The thread references an older OAuth scope list.", "Verify current scopes before adding to implementation notes."],
-  ["Unclear newsletter category", "Founder Weekly", "Newsletter", "Review this week", "2026-06-23", "2026-07-03", "low", 0.69, "The content could be news or a task depending on whether the team wants to apply.", "Choose news summary or task."],
-  ["Calendar cancellation conflict", "Outlook calendar", "Invite cancellation", "Review today", "2026-06-27", "2026-06-27", "medium", 0.6, "A cancellation arrived after a reschedule for the same title.", "Confirm whether the meeting is still happening."]
-];
-
-const news = [
-  { title: "AWS credits program update", detail: "New startup tier available through July." },
-  { title: "Campus demo night", detail: "Applications mention a possible 30 Jun deadline." },
-  { title: "Security digest", detail: "OAuth token handling guidance changed." },
-  { title: "OpenAI product update", detail: "New dashboard features mentioned for team workflows." },
-  { title: "Founder grant roundup", detail: "Several early-stage grants open next week." },
-  { title: "Outlook API notice", detail: "Reminder about read-only Graph scopes and consent copy." },
-  { title: "Design systems weekly", detail: "Useful notes on dense dashboard layouts and contrast." },
-  { title: "Cloud cost alert", detail: "Free tier usage is approaching the monthly email quota." },
-  { title: "Hackathon schedule update", detail: "Judging windows and booth setup reminders were clarified." },
-  { title: "Privacy engineering digest", detail: "Short guidance on retention controls and audit logs." },
-  { title: "NUS startup newsletter", detail: "Mentor matching applications reopen for student teams." },
-  { title: "Product analytics brief", detail: "Teams are tracking activation through first useful action." },
-  { title: "Accessibility roundup", detail: "Focus state and keyboard navigation examples for controls." },
-  { title: "Gmail API newsletter", detail: "New examples for incremental sync and message history." },
-  { title: "Startup operations note", detail: "Templates for post-demo follow-up and investor updates." }
-];
-
-function makeItem(example, index, type) {
-  const [title, owner, source, time, createdAt, dueAt, priority, confidence, summary, next] = example;
-  const prefix = type === "needs_review" ? "review" : type;
-  return {
-    id: `${prefix}-${index + 1}`,
-    type,
-    title: type === "meeting" ? `Prepare notes for ${title}` : title,
-    owner,
-    source,
-    time,
-    createdAt,
-    dueAt,
-    priority,
-    confidence,
-    summary,
-    next,
-    status: "open"
-  };
-}
-
-const items = [
-  ...taskExamples.map((example, index) => makeItem(example, index, "task")),
-  ...meetingExamples.map((example, index) => makeItem(example, index, "meeting")),
-  ...reviewExamples.map((example, index) => makeItem(example, index, "needs_review"))
-];
-
-const meetings = meetingExamples.map(([title, start, , , , , , , , next]) => ({
-  title,
-  detail: `${start} - ${next}`
-}));
+const items = [];
+const meetings = [];
+const news = [];
 
 const focusData = {
   meetings: {
     title: "Meetings",
-    meta: () => `${meetings.length} this week`,
+    meta: () => `${meetings.length} scheduled`,
     items: () => meetings.map((meeting) => ({
+      id: meeting.id,
       title: meeting.title,
       detail: meeting.detail
     }))
@@ -123,15 +25,14 @@ const focusData = {
   },
   news: {
     title: "News Feed",
-    meta: () => "summarized",
-    items: () => news.map((story) => ({
+    meta: () => `${news.length} updates`,
+    items: () => news.map((story, index) => ({
+      id: `news-${index}`,
       title: story.title,
       detail: story.detail
     }))
   }
 };
-
-let focusOrder = ["meetings", "tasks", "news"];
 
 const typeIcon = {
   task: "T",
@@ -145,6 +46,7 @@ const typeLabel = {
   needs_review: "Needs review"
 };
 
+let focusOrder = ["meetings", "tasks", "news"];
 let activeFilter = "all";
 let query = "";
 let createdFromFilter = "";
@@ -160,14 +62,15 @@ let draggedSection = null;
 let openDateMenu = null;
 let activeTheme = "light";
 let accountStates = {
-  gmail: true,
-  outlook: true
+  gmail: false,
+  outlook: false
 };
 const sourceCounts = {
-  gmail: 32,
-  outlook: 18
+  gmail: 0,
+  outlook: 0
 };
 const todayIso = "2026-06-27";
+const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const queueList = document.querySelector("#queueList");
 const searchInput = document.querySelector("#searchInput");
@@ -193,12 +96,12 @@ const confidenceThresholdInput = document.querySelector("#confidenceThreshold");
 const confidenceValue = document.querySelector("#confidenceValue");
 const toast = document.querySelector("#toast");
 const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 let calendarMonth = 5;
 let calendarYear = 2026;
 
 function dateInRange(dateText, fromText, toText) {
-  if (!dateText) return false;
+  if (!dateText) return !fromText && !toText;
   if (fromText && dateText < fromText) return false;
   if (toText && dateText > toText) return false;
   return true;
@@ -273,6 +176,18 @@ function toDisplayDate(dateText) {
   return `${day}/${month}/${year}`;
 }
 
+function formatDate(dateText) {
+  if (!dateText) return "No date";
+  return toDisplayDate(dateText);
+}
+
+function formatDateRange(fromText, toText) {
+  if (!fromText && !toText) return "Any date";
+  if (fromText && toText) return `${formatDate(fromText)} - ${formatDate(toText)}`;
+  if (fromText) return `From ${formatDate(fromText)}`;
+  return `To ${formatDate(toText)}`;
+}
+
 function visibleItems() {
   return items.filter((item) => {
     if (item.status === "dismissed") return false;
@@ -340,18 +255,6 @@ function setCalendarMonth(month, year) {
 function shiftCalendarMonth(offset) {
   const date = new Date(Date.UTC(calendarYear, calendarMonth + offset, 1));
   setCalendarMonth(date.getUTCMonth(), date.getUTCFullYear());
-}
-
-function formatDate(dateText) {
-  if (!dateText) return "No date";
-  return toDisplayDate(dateText);
-}
-
-function formatDateRange(fromText, toText) {
-  if (!fromText && !toText) return "Any date";
-  if (fromText && toText) return `${formatDate(fromText)} - ${formatDate(toText)}`;
-  if (fromText) return `From ${formatDate(fromText)}`;
-  return `To ${formatDate(toText)}`;
 }
 
 function priorityTag(priority, type) {
@@ -430,15 +333,17 @@ function toggleDateMenu(menu) {
 
 function renderFocusStack() {
   const stack = document.querySelector("#focusStack");
-  stack.innerHTML = focusOrder.map((kind, index) => {
+  stack.innerHTML = focusOrder.map((kind) => {
     const section = focusData[kind];
     const sectionItems = section.items();
-    const rows = sectionItems.map((entry) => `
-      <button class="compact-item text-button" ${entry.id ? `data-action="inspect" data-id="${escapeHtml(entry.id)}"` : `data-note="${escapeHtml(entry.title)}"`}>
-        <strong>${escapeHtml(entry.title)}</strong>
-        <span>${escapeHtml(entry.detail)}</span>
-      </button>
-    `).join("");
+    const rows = sectionItems.length
+      ? sectionItems.map((entry) => `
+          <button class="compact-item text-button" ${entry.id ? `data-action="inspect" data-id="${escapeHtml(entry.id)}"` : `data-note="${escapeHtml(entry.title)}"`}>
+            <strong>${escapeHtml(entry.title)}</strong>
+            <span>${escapeHtml(entry.detail)}</span>
+          </button>
+        `).join("")
+      : `<p class="empty-state">No ${section.title.toLowerCase()} yet.</p>`;
 
     return `
       <section class="mini-section" data-kind="${kind}">
@@ -484,7 +389,7 @@ function renderStackMenu() {
 function updateMetrics() {
   const openItems = items.filter((item) => item.status !== "dismissed");
   document.querySelector("#taskCount").textContent = openItems.filter((item) => item.type === "task").length;
-  document.querySelector("#dueTodayCount").textContent = openItems.filter((item) => item.time.includes("Due") || item.time.includes("today")).length;
+  document.querySelector("#dueTodayCount").textContent = openItems.filter((item) => item.dueAt === todayIso).length;
   document.querySelector("#weeklyMeetingCount").textContent = meetings.length;
   document.querySelector("#reviewCount").textContent = openItems.filter((item) => item.type === "needs_review").length;
   document.querySelectorAll("[data-metric-filter]").forEach((metric) => {
@@ -528,10 +433,46 @@ function inspectItem(id) {
   drawer.classList.add("open");
 }
 
+function renderAccountStates() {
+  document.querySelectorAll("[data-action='toggle-account']").forEach((button) => {
+    const account = button.dataset.account;
+    const connected = accountStates[account];
+    button.textContent = connected ? "Connected" : "Connect";
+    button.classList.toggle("connected", connected);
+  });
+
+  Object.entries(sourceCounts).forEach(([account, count]) => {
+    const countElement = document.querySelector(`#${account}SourceCount`);
+    if (countElement) countElement.textContent = String(count);
+  });
+}
+
+function registerEmailScan(result) {
+  const provider = String(result.provider || "").toLowerCase();
+  if (provider in sourceCounts) {
+    sourceCounts[provider] = Array.isArray(result.source_items) ? result.source_items.length : 0;
+    accountStates[provider] = sourceCounts[provider] > 0;
+    renderAccountStates();
+  }
+}
+
+function toggleAccount(account) {
+  accountStates = {
+    ...accountStates,
+    [account]: !accountStates[account]
+  };
+  if (!accountStates[account]) {
+    sourceCounts[account] = 0;
+  }
+  renderAccountStates();
+  showToast(`${account} ${accountStates[account] ? "connected" : "disconnected"} locally.`);
+}
+
 function addAgentDashboardUpdate(update) {
   const incomingItems = Array.isArray(update.dashboard_items) ? update.dashboard_items : [];
   const incomingNews = Array.isArray(update.dashboard_news) ? update.dashboard_news : [];
   const existingIds = new Set(items.map((item) => item.id));
+  let addedCount = 0;
 
   incomingItems.forEach((item) => {
     if (!item || existingIds.has(item.id)) return;
@@ -553,9 +494,11 @@ function addAgentDashboardUpdate(update) {
 
     items.unshift(normalized);
     existingIds.add(normalized.id);
+    addedCount += 1;
 
     if (normalized.type === "meeting") {
       meetings.unshift({
+        id: normalized.id,
         title: normalized.title,
         detail: `${normalized.time} - ${normalized.next}`
       });
@@ -571,11 +514,12 @@ function addAgentDashboardUpdate(update) {
   });
 
   renderQueue();
-  showToast(`Dashboard updated from ${incomingItems.length + incomingNews.length} email item${incomingItems.length + incomingNews.length === 1 ? "" : "s"}.`);
+  showToast(`Dashboard updated from ${addedCount + incomingNews.length} AI result${addedCount + incomingNews.length === 1 ? "" : "s"}.`);
 }
 
 window.LifeAdminDashboard = {
-  addAgentDashboardUpdate
+  addAgentDashboardUpdate,
+  registerEmailScan
 };
 
 function showToast(message) {
@@ -608,34 +552,10 @@ function setTheme(theme) {
   document.querySelectorAll("[data-theme-option]").forEach((button) => {
     button.classList.toggle("active", button.dataset.themeOption === theme);
   });
-
 }
 
 function updateConfidenceThreshold(value) {
   confidenceValue.textContent = `${value}%`;
-}
-
-function renderAccountStates() {
-  document.querySelectorAll("[data-action='toggle-account']").forEach((button) => {
-    const account = button.dataset.account;
-    const connected = accountStates[account];
-    button.textContent = connected ? "Connected" : "Connect";
-    button.classList.toggle("connected", connected);
-  });
-
-  Object.entries(sourceCounts).forEach(([account, count]) => {
-    const countElement = document.querySelector(`#${account}SourceCount`);
-    if (countElement) countElement.textContent = accountStates[account] ? count : "Off";
-  });
-}
-
-function toggleAccount(account) {
-  accountStates = {
-    ...accountStates,
-    [account]: !accountStates[account]
-  };
-  renderAccountStates();
-  showToast(`${account} ${accountStates[account] ? "connected" : "disconnected"} in demo mode.`);
 }
 
 function handleAction(action, id) {
@@ -663,7 +583,6 @@ function handleAction(action, id) {
 function moveSection(kind, direction) {
   const index = focusOrder.indexOf(kind);
   if (index === -1) return;
-
   const targetIndex = direction === "up" ? index - 1 : index + 1;
   if (targetIndex < 0 || targetIndex >= focusOrder.length) return;
 
@@ -756,14 +675,13 @@ function applyMetricFilter(metric) {
 
   if (metric === "due_today") {
     activeFilter = "all";
-    dueFromFilter = "2026-06-27";
-    dueToFilter = "2026-06-27";
+    dueFromFilter = todayIso;
+    dueToFilter = todayIso;
   }
 
   if (metric === "weekly_meetings") {
     activeFilter = "meeting";
-    dueFromFilter = "2026-06-27";
-    dueToFilter = "2026-07-04";
+    dueFromFilter = todayIso;
   }
 
   if (metric === "review_required") {
@@ -836,18 +754,14 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  if (!event.target.closest(".stack-menu") && !event.target.closest("#stackSettingsBtn")) {
-    if (stackMenuOpen) {
-      stackMenuOpen = false;
-      renderStackMenu();
-    }
+  if (!event.target.closest(".stack-menu") && !event.target.closest("#stackSettingsBtn") && stackMenuOpen) {
+    stackMenuOpen = false;
+    renderStackMenu();
   }
 
-  if (!event.target.closest("[data-date-menu]")) {
-    if (openDateMenu) {
-      openDateMenu = null;
-      renderDateMenus();
-    }
+  if (!event.target.closest("[data-date-menu]") && openDateMenu) {
+    openDateMenu = null;
+    renderDateMenus();
   }
 });
 

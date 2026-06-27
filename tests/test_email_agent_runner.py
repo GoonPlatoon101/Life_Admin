@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from life_admin.scanner.email_agent_runner import (
+    agent_result_diagnostics,
     dashboard_update_from_agent_results,
     email_source_key,
     process_email_source_items,
@@ -17,6 +18,40 @@ class FakeAgent:
     def process_source_item(self, source_item):
         self.source_items.append(source_item)
         return {"status": "completed", "final_output": {"status": "saved", "items": []}}
+
+
+class DuplicateTaskAgent:
+    def process_source_item(self, source_item):
+        return {
+            "status": "completed",
+            "final_output": {
+                "status": "saved",
+                "items": [
+                    {
+                        "title": "Reply to Justin with final numbers",
+                        "category": "reply_needed",
+                        "summary": "Justin asked Tony to reply with the final numbers before the 3pm planning meeting.",
+                        "recommended_next_action": "Confirm the final numbers and reply to Justin before the 3pm planning meeting.",
+                        "due_date": "2026-06-27",
+                        "priority": "high",
+                        "confidence": 0.88,
+                        "source_reasoning": "Direct reply request in the email.",
+                        "needs_review": False,
+                    },
+                    {
+                        "title": "Send project status update and final numbers",
+                        "category": "task",
+                        "summary": "Justin asked Tony to send the project status update by Friday and reply with the final numbers before the 3pm planning meeting.",
+                        "recommended_next_action": "Reply to Justin with the final numbers before the 3pm planning meeting and prepare/send the project status update by Friday.",
+                        "due_date": "2026-06-27",
+                        "priority": "high",
+                        "confidence": 0.94,
+                        "source_reasoning": "The email contains two explicit asks.",
+                        "needs_review": False,
+                    },
+                ]
+            },
+        }
 
 
 class EmailAgentRunnerTest(unittest.TestCase):
@@ -64,6 +99,26 @@ class EmailAgentRunnerTest(unittest.TestCase):
             "outlook:message-1",
         )
 
+    def test_process_email_source_items_merges_overlapping_task_like_outputs(self) -> None:
+        results = process_email_source_items(
+            DuplicateTaskAgent(),
+            [
+                {
+                    "provider": "google",
+                    "source_id": "gmail-3",
+                    "content": "Justin asked Tony to send the project status update by Friday and reply with the final numbers before the 3pm planning meeting.",
+                }
+            ],
+        )
+
+        self.assertEqual(len(results), 1)
+        items = results[0]["agent_result"]["final_output"]["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["category"], "task")
+        self.assertIn("project status update", items[0]["summary"].lower())
+        self.assertIn("final numbers", items[0]["recommended_next_action"].lower())
+        self.assertIn("friday", items[0]["recommended_next_action"].lower())
+
     def test_dashboard_update_from_agent_results_maps_items_for_queue(self) -> None:
         update = dashboard_update_from_agent_results(
             [
@@ -78,6 +133,7 @@ class EmailAgentRunnerTest(unittest.TestCase):
                                     "category": "task",
                                     "summary": "Ava asked for the budget by Friday.",
                                     "recommended_next_action": "Reply with the budget.",
+                                    "due_date": "2026-06-30",
                                     "priority": "high",
                                     "confidence": 0.92,
                                     "source_reasoning": "Explicit request in email.",
@@ -88,6 +144,7 @@ class EmailAgentRunnerTest(unittest.TestCase):
                                     "category": "news",
                                     "summary": "New grant applications opened.",
                                     "recommended_next_action": "Read later.",
+                                    "due_date": "",
                                     "priority": "low",
                                     "confidence": 0.9,
                                     "source_reasoning": "Newsletter content.",
@@ -105,8 +162,200 @@ class EmailAgentRunnerTest(unittest.TestCase):
         self.assertEqual(update["dashboard_items"][0]["type"], "task")
         self.assertEqual(update["dashboard_items"][0]["title"], "Send budget")
         self.assertEqual(update["dashboard_items"][0]["createdAt"], "2026-06-27")
+        self.assertEqual(update["dashboard_items"][0]["dueAt"], "2026-06-30")
         self.assertEqual(len(update["dashboard_news"]), 1)
         self.assertEqual(update["dashboard_news"][0]["title"], "Grant digest")
+
+    def test_dashboard_update_keeps_meetings_and_tasks_separate(self) -> None:
+        update = dashboard_update_from_agent_results(
+            [
+                {
+                    "source_key": "google:gmail-5",
+                    "source_id": "gmail-5",
+                    "agent_result": {
+                        "final_output": {
+                            "items": [
+                                {
+                                    "title": "Prepare planning deck",
+                                    "category": "task",
+                                    "summary": "Update the deck before the planning meeting.",
+                                    "recommended_next_action": "Update and send the latest deck.",
+                                    "due_date": "2026-06-29",
+                                    "priority": "high",
+                                    "confidence": 0.94,
+                                    "source_reasoning": "Explicit request to update the deck.",
+                                    "needs_review": False,
+                                },
+                                {
+                                    "title": "Planning meeting prep",
+                                    "category": "meeting",
+                                    "summary": "Bring the updated deck to the planning meeting.",
+                                    "recommended_next_action": "Review agenda and prepare talking points.",
+                                    "due_date": "2026-06-30",
+                                    "priority": "medium",
+                                    "confidence": 0.91,
+                                    "source_reasoning": "Meeting preparation is required.",
+                                    "needs_review": False,
+                                },
+                            ]
+                        }
+                    },
+                }
+            ],
+            created_at="2026-06-27",
+        )
+
+        self.assertEqual(len(update["dashboard_items"]), 2)
+        item_types = [item["type"] for item in update["dashboard_items"]]
+        self.assertIn("task", item_types)
+        self.assertIn("meeting", item_types)
+        due_dates = {item["title"]: item["dueAt"] for item in update["dashboard_items"]}
+        self.assertEqual(due_dates["Prepare planning deck"], "2026-06-29")
+        self.assertEqual(due_dates["Planning meeting prep"], "2026-06-30")
+
+    def test_dashboard_update_from_agent_results_creates_fallback_review_item(self) -> None:
+        update = dashboard_update_from_agent_results(
+            [
+                {
+                    "source_key": "google:gmail-2",
+                    "source_id": "gmail-2",
+                    "agent_result": {
+                        "status": "needs_review",
+                        "final_output": {
+                            "status": "needs_review",
+                            "reason": "Classification was uncertain.",
+                            "items": [],
+                        },
+                    },
+                }
+            ],
+            created_at="2026-06-27",
+        )
+
+        self.assertEqual(len(update["dashboard_items"]), 1)
+        self.assertEqual(update["dashboard_items"][0]["type"], "needs_review")
+        self.assertIn("Classification was uncertain", update["dashboard_items"][0]["summary"])
+        self.assertEqual(update["dashboard_items"][0]["dueAt"], "2026-06-27")
+
+    def test_agent_result_diagnostics_counts_empty_and_needs_review_results(self) -> None:
+        diagnostics = agent_result_diagnostics(
+            [
+                {
+                    "source_id": "gmail-1",
+                    "agent_result": {
+                        "status": "completed",
+                        "final_output": {"status": "saved", "items": []},
+                    },
+                },
+                {
+                    "source_id": "gmail-2",
+                    "agent_result": {
+                        "status": "needs_review",
+                        "final_output": {
+                            "status": "needs_review",
+                            "reason": "Classification was uncertain.",
+                            "items": [],
+                        },
+                    },
+                },
+                {
+                    "source_id": "gmail-3",
+                    "agent_result": {
+                        "status": "completed",
+                        "final_output": {
+                            "status": "noise",
+                            "reason": "Newsletter footer only.",
+                            "items": [],
+                        },
+                    },
+                },
+            ]
+        )
+
+        self.assertEqual(diagnostics["empty_result_count"], 3)
+        self.assertEqual(diagnostics["needs_review_count"], 1)
+        self.assertEqual(diagnostics["noise_count"], 1)
+        self.assertEqual(len(diagnostics["diagnostics"]), 3)
+        self.assertEqual(diagnostics["diagnostics"][1]["status"], "needs_review")
+
+    def test_process_email_source_items_keeps_distinct_partial_overlap_tasks(self) -> None:
+        class PartialOverlapAgent:
+            def process_source_item(self, source_item):
+                return {
+                    "status": "completed",
+                    "final_output": {
+                        "status": "saved",
+                        "items": [
+                            {
+                                "title": "Reply to Justin with final numbers",
+                                "category": "reply_needed",
+                                "summary": "Justin asked Tony to reply with the final numbers before the 3pm planning meeting.",
+                                "recommended_next_action": "Confirm the final numbers and reply to Justin before the 3pm planning meeting.",
+                                "due_date": "2026-06-27",
+                                "priority": "high",
+                                "confidence": 0.88,
+                                "source_reasoning": "Direct reply request in the email.",
+                                "needs_review": False,
+                            },
+                            {
+                                "title": "Send project status update",
+                                "category": "task",
+                                "summary": "Justin asked Tony to send the project status update by Friday.",
+                                "recommended_next_action": "Prepare and send the project status update by Friday.",
+                                "due_date": "2026-06-28",
+                                "priority": "high",
+                                "confidence": 0.94,
+                                "source_reasoning": "Separate explicit request in the email.",
+                                "needs_review": False,
+                            },
+                        ]
+                    },
+                }
+
+        results = process_email_source_items(
+            PartialOverlapAgent(),
+            [
+                {
+                    "provider": "google",
+                    "source_id": "gmail-4",
+                    "content": "Justin asked Tony to send the project status update by Friday and reply with the final numbers before the 3pm planning meeting.",
+                }
+            ],
+        )
+
+        self.assertEqual(len(results), 1)
+        items = results[0]["agent_result"]["final_output"]["items"]
+        self.assertEqual(len(items), 2)
+
+    def test_dashboard_update_falls_back_to_created_date_when_due_date_missing(self) -> None:
+        update = dashboard_update_from_agent_results(
+            [
+                {
+                    "source_key": "google:gmail-6",
+                    "source_id": "gmail-6",
+                    "agent_result": {
+                        "final_output": {
+                            "items": [
+                                {
+                                    "title": "Check with finance",
+                                    "category": "task",
+                                    "summary": "A follow-up is needed.",
+                                    "recommended_next_action": "Check with finance.",
+                                    "due_date": "",
+                                    "priority": "medium",
+                                    "confidence": 0.9,
+                                    "source_reasoning": "No explicit date was given.",
+                                    "needs_review": False,
+                                }
+                            ]
+                        }
+                    },
+                }
+            ],
+            created_at="2026-06-27",
+        )
+
+        self.assertEqual(update["dashboard_items"][0]["dueAt"], "2026-06-27")
 
 
 if __name__ == "__main__":
