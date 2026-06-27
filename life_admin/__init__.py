@@ -1,0 +1,2 @@
+"""LifeAdmin core package."""
+
