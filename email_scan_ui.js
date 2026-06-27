@@ -138,7 +138,7 @@
           </label>
           <label class="email-scan-field">
             <span>Max messages</span>
-            <input id="emailScanMax" type="number" min="1" max="25" value="5" />
+            <input id="emailScanMax" type="number" min="1" max="25" value="1" />
           </label>
           <p class="empty-state">The token is sent only to the local scanner endpoint. AI processing happens in a separate step after the scan preview.</p>
         </div>
@@ -261,7 +261,7 @@
       provider: state.modal.querySelector("#emailScanProvider").value,
       access_token: state.modal.querySelector("#emailScanToken").value,
       query: state.modal.querySelector("#emailScanQuery").value,
-      max_results: Number(state.modal.querySelector("#emailScanMax").value || 5)
+      max_results: Number(state.modal.querySelector("#emailScanMax").value || 1)
     };
 
     const submit = state.modal.querySelector("#emailScanSubmit");
@@ -299,6 +299,7 @@
       processButton.disabled = true;
       processButton.textContent = "Processing...";
     }
+    showToast("AI processing started. This can take a while even for one email.");
 
     try {
       const response = await fetch("/api/email/process", {
