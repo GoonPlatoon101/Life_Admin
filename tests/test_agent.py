@@ -1,6 +1,7 @@
 import os
 import unittest
 from copy import deepcopy
+from json import dumps
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -10,46 +11,109 @@ from config import Config, load_config
 
 
 class FakeCompletions:
-    def __init__(self) -> None:
+    def __init__(self, responses: list[dict] | None = None) -> None:
         self.kwargs = None
+        self.calls = []
+        self.responses = responses or [{"message": "Test response"}]
 
     def create(self, **kwargs):
         self.kwargs = deepcopy(kwargs)
-        message = SimpleNamespace(content="Test response")
+        self.calls.append(deepcopy(kwargs))
+        response = self.responses.pop(0)
+        message = SimpleNamespace(content=dumps(response))
         choice = SimpleNamespace(message=message)
         return SimpleNamespace(choices=[choice])
 
 
 class FakeClient:
-    def __init__(self) -> None:
-        self.chat = SimpleNamespace(completions=FakeCompletions())
+    def __init__(self, responses: list[dict] | None = None) -> None:
+        self.chat = SimpleNamespace(completions=FakeCompletions(responses))
 
 
 class AgentTests(unittest.TestCase):
-    def test_agent_sends_user_prompt_and_stores_response(self):
+    def _config(self):
+        return Config(
+            llm_api_key="test-key",
+            llm_base_url="http://localhost:11434/v1",
+            llm_model="qwen3",
+            working_dir=Path.cwd(),
+        )
+
+    def test_agent_processes_source_item_through_loop(self):
         config = Config(
             llm_api_key="test-key",
             llm_base_url="http://localhost:11434/v1",
             llm_model="qwen3",
             working_dir=Path.cwd(),
         )
-        client = FakeClient()
+        client = FakeClient(
+            [
+                {"is_relevant": True, "reason": "Contains an action item.", "confidence": 0.95},
+                {
+                    "categories": ["task"],
+                    "primary_category": "task",
+                    "reason": "The user needs to do something.",
+                    "confidence": 0.92,
+                },
+                {
+                    "items": [
+                        {
+                            "title": "Send project update",
+                            "category": "task",
+                            "summary": "Send an update to Alex by Friday.",
+                            "recommended_next_action": "Draft and send the update.",
+                            "priority": "medium",
+                            "confidence": 0.91,
+                            "source_reasoning": "The source explicitly asks for an update.",
+                            "needs_review": False,
+                        }
+                    ]
+                },
+            ]
+        )
         agent = Agent(config=config, client=client, system_prompt="System prompt")
 
         with patch("builtins.input", return_value="What needs attention today?"):
             response = agent.run()
 
-        self.assertEqual(response, "Test response")
-        self.assertEqual(client.chat.completions.kwargs["model"], "qwen3")
-        self.assertEqual(client.chat.completions.kwargs["temperature"], 0.2)
-        self.assertEqual(
-            client.chat.completions.kwargs["messages"],
+        self.assertIn('"status": "saved"', response)
+        self.assertEqual(len(client.chat.completions.calls), 3)
+        self.assertEqual(client.chat.completions.calls[0]["model"], "qwen3")
+        self.assertEqual(client.chat.completions.calls[0]["temperature"], 0.0)
+
+    def test_agent_marks_low_confidence_items_for_review(self):
+        client = FakeClient(
             [
-                {"role": "system", "content": "System prompt"},
-                {"role": "user", "content": "What needs attention today?"},
-            ],
+                {"is_relevant": True, "reason": "Contains an action item.", "confidence": 0.8},
+                {
+                    "categories": ["task"],
+                    "primary_category": "task",
+                    "reason": "Possible task.",
+                    "confidence": 0.76,
+                },
+                {
+                    "items": [
+                        {
+                            "title": "Check possible deadline",
+                            "category": "task",
+                            "summary": "There may be a deadline.",
+                            "recommended_next_action": "Verify the deadline.",
+                            "priority": "medium",
+                            "confidence": 0.7,
+                            "source_reasoning": "The source is ambiguous.",
+                            "needs_review": False,
+                        }
+                    ]
+                },
+            ]
         )
-        self.assertEqual(agent.messages[-1], {"role": "assistant", "content": "Test response"})
+        agent = Agent(config=self._config(), client=client, system_prompt="System prompt")
+
+        with patch("builtins.input", return_value="Maybe I owe Sam the report soon"):
+            response = agent.run()
+
+        self.assertIn('"status": "needs_review"', response)
+        self.assertIn('"needs_review": true', response)
 
     def test_load_config_reads_env_file(self):
         old_values = {

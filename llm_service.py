@@ -1,5 +1,7 @@
 import json
+import re
 import time
+from typing import Any
 
 from openai import (
     OpenAI,
@@ -54,3 +56,31 @@ def complete_with_retry(client: OpenAI, *, on_retry=None, **kwargs):
     raise RuntimeError(
         f"LLM request failed after {MAX_API_RETRIES} attempts: {last_exc}"
     ) from last_exc
+
+
+def _extract_json_object(content: str) -> dict[str, Any]:
+    cleaned = content.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            raise
+        parsed = json.loads(cleaned[start : end + 1])
+
+    if not isinstance(parsed, dict):
+        raise ValueError("Expected the model to return a JSON object.")
+    return parsed
+
+
+def complete_json_with_retry(client: OpenAI, *, on_retry=None, **kwargs) -> dict[str, Any]:
+    response = complete_with_retry(client, on_retry=on_retry, **kwargs)
+    content = response.choices[0].message.content
+    if content is None:
+        raise ValueError("Model returned an empty message.")
+    return _extract_json_object(content)
