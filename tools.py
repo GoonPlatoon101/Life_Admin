@@ -15,17 +15,27 @@ def _call_json_tool(
     instruction: str,
     content: str,
 ) -> dict[str, Any]:
+    output_contract = (
+        "Output contract: return exactly one top-level JSON object. "
+        "Do not return a JSON array, string, number, boolean, null, markdown, or commentary. "
+        "Use double quotes for all JSON keys and string values."
+    )
     messages = [
         {
             "role": "system",
             "content": (
                 "You are a LifeAdmin extraction tool. Return only valid JSON. "
-                "Do not include markdown or commentary."
+                f"{output_contract}"
             ),
         },
         {
             "role": "user",
-            "content": f"Tool: {tool_name}\n\nInstruction:\n{instruction}\n\nContent:\n{content}",
+            "content": (
+                f"Tool: {tool_name}\n\n"
+                f"{output_contract}\n\n"
+                f"Instruction:\n{instruction}\n\n"
+                f"Content:\n{content}"
+            ),
         },
     ]
     return complete_json_with_retry(
@@ -43,7 +53,9 @@ def filter_content(client: OpenAI, config: Config, source_item: SourceItem) -> d
         tool_name="filter_content",
         instruction=(
             "Decide whether this content is worth processing for life admin. "
-            "Return: is_relevant boolean, reason string, confidence number from 0 to 1."
+            "Return a JSON object with exactly these keys: "
+            '{"is_relevant": boolean, "reason": string, "confidence": number}. '
+            "confidence must be between 0 and 1."
         ),
         content=source_item.content,
     )
@@ -56,8 +68,10 @@ def classify_content(client: OpenAI, config: Config, source_item: SourceItem) ->
         tool_name="classify_content",
         instruction=(
             "Classify the content into one or more categories from: task, deadline, "
-            "meeting, reply_needed, follow_up, news, noise, uncertain. Return: "
-            "categories array, primary_category string, reason string, confidence number from 0 to 1."
+            "meeting, reply_needed, follow_up, news, noise, uncertain. Return a JSON object "
+            "with exactly these keys: "
+            '{"categories": [string], "primary_category": string, "reason": string, '
+            '"confidence": number}. confidence must be between 0 and 1.'
         ),
         content=source_item.content,
     )
@@ -69,9 +83,12 @@ def extract_tasks(client: OpenAI, config: Config, source_item: SourceItem) -> di
         config,
         tool_name="extract_tasks",
         instruction=(
-            "Extract actionable tasks and deadlines. Return: items array. Each item must have "
-            "title, category, summary, recommended_next_action, priority, confidence, "
-            "source_reasoning, needs_review."
+            "Extract actionable tasks and deadlines. Return a JSON object with exactly one "
+            'top-level key: {"items": [item]}. Each item must be a JSON object with exactly '
+            "these keys: title, category, summary, recommended_next_action, priority, "
+            "confidence, source_reasoning, needs_review. confidence must be a number from "
+            "0 to 1. needs_review must be a boolean. If there are no tasks, return "
+            '{"items": []}.'
         ),
         content=source_item.content,
     )
@@ -83,9 +100,12 @@ def extract_email_actions(client: OpenAI, config: Config, source_item: SourceIte
         config,
         tool_name="extract_email_actions",
         instruction=(
-            "Detect whether a reply is needed and extract reply guidance. Return: items array. "
-            "Each item must have title, category, summary, recommended_next_action, priority, "
-            "confidence, source_reasoning, needs_review."
+            "Detect whether a reply is needed and extract reply guidance. Return a JSON object "
+            'with exactly one top-level key: {"items": [item]}. Each item must be a JSON '
+            "object with exactly these keys: title, category, summary, "
+            "recommended_next_action, priority, confidence, source_reasoning, needs_review. "
+            "confidence must be a number from 0 to 1. needs_review must be a boolean. "
+            'If no reply is needed, return {"items": []}.'
         ),
         content=source_item.content,
     )
@@ -97,9 +117,12 @@ def extract_meeting_context(client: OpenAI, config: Config, source_item: SourceI
         config,
         tool_name="extract_meeting_context",
         instruction=(
-            "Extract meeting prep notes, agenda hints, and follow-up tasks. Return: items array. "
-            "Each item must have title, category, summary, recommended_next_action, priority, "
-            "confidence, source_reasoning, needs_review."
+            "Extract meeting prep notes, agenda hints, and follow-up tasks. Return a JSON object "
+            'with exactly one top-level key: {"items": [item]}. Each item must be a JSON '
+            "object with exactly these keys: title, category, summary, "
+            "recommended_next_action, priority, confidence, source_reasoning, needs_review. "
+            "confidence must be a number from 0 to 1. needs_review must be a boolean. "
+            'If there is no meeting context, return {"items": []}.'
         ),
         content=source_item.content,
     )
@@ -111,9 +134,12 @@ def extract_news_items(client: OpenAI, config: Config, source_item: SourceItem) 
         config,
         tool_name="extract_news_items",
         instruction=(
-            "Summarize informative updates or newsletters. Return: items array. Each item must "
-            "have title, category, summary, recommended_next_action, priority, confidence, "
-            "source_reasoning, needs_review."
+            "Summarize informative updates or newsletters. Return a JSON object with exactly "
+            'one top-level key: {"items": [item]}. Each item must be a JSON object with '
+            "exactly these keys: title, category, summary, recommended_next_action, priority, "
+            "confidence, source_reasoning, needs_review. confidence must be a number from "
+            "0 to 1. needs_review must be a boolean. If there are no informative updates, "
+            'return {"items": []}.'
         ),
         content=source_item.content,
     )

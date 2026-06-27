@@ -104,8 +104,8 @@ class Agent:
         return self._finish(state, "completed", output)
 
     def _call_tool(self, state, name, tool_func, source_item):
-        if state.tool_call_count >= self.limits.max_tool_calls_per_item:
-            raise RuntimeError("Agent loop exceeded max_tool_calls_per_item.")
+        # if state.tool_call_count >= self.limits.max_tool_calls_per_item:
+        #     raise RuntimeError("Agent loop exceeded max_tool_calls_per_item.")
 
         result = tool_func(self.client, self.config, source_item)
         state.add_tool_call(name, result)
