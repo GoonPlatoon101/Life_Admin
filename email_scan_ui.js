@@ -2,7 +2,9 @@
   const state = {
     modal: null,
     preview: null,
-    running: false
+    running: false,
+    syncPayload: null,
+    pollTimer: null
   };
 
   function installStyles() {
@@ -114,7 +116,7 @@
         <div class="email-scan-head">
           <div>
             <p class="eyebrow">Read-only scanner</p>
-            <h2>Connect email source</h2>
+            <h2>Connect email sync</h2>
           </div>
           <button class="drawer-close" type="button" data-email-scan-close title="Close">x</button>
         </div>
@@ -142,7 +144,7 @@
         </div>
         <div class="email-scan-actions">
           <button class="text-button" type="button" data-email-scan-close>Cancel</button>
-          <button class="primary-button" id="emailScanSubmit" type="submit">Scan inbox</button>
+          <button class="primary-button" id="emailScanSubmit" type="submit">Start sync</button>
         </div>
       </form>
     `;
@@ -184,24 +186,32 @@
   }
 
   function renderPreview(result) {
-    const items = result.source_items || [];
+    const items = result.dashboard_items || [];
+    const stories = result.dashboard_news || [];
     const rows = items.map((item) => `
       <article class="email-source-card">
-        <strong>${escapeHtml(item.title || "(no subject)")}</strong>
-        <span>${escapeHtml(item.provider || result.provider)} - ${escapeHtml(item.source_id || "")}</span>
-        <span>${escapeHtml((item.content || "").slice(0, 220))}</span>
+        <strong>${escapeHtml(item.title || "Email item")}</strong>
+        <span>${escapeHtml(item.type || "task")} - ${escapeHtml(item.source || "")}</span>
+        <span>${escapeHtml((item.summary || item.next || "").slice(0, 220))}</span>
+      </article>
+    `).join("");
+    const newsRows = stories.map((story) => `
+      <article class="email-source-card">
+        <strong>${escapeHtml(story.title || "Email update")}</strong>
+        <span>news</span>
+        <span>${escapeHtml((story.detail || "").slice(0, 220))}</span>
       </article>
     `).join("");
 
     state.preview.innerHTML = `
       <div class="email-scan-head">
         <div>
-          <p class="eyebrow">Scanner result</p>
-          <h2>${items.length} email source items</h2>
+          <p class="eyebrow">Email agent result</p>
+          <h2>${result.processed_count || 0} new email updates processed</h2>
         </div>
         <button class="drawer-close" type="button" id="closeEmailPreview" title="Close">x</button>
       </div>
-      ${rows || '<p class="empty-state">No email messages matched this scan.</p>'}
+      ${rows || newsRows ? rows + newsRows : '<p class="empty-state">No new email updates matched this sync.</p>'}
     `;
     state.preview.classList.add("open");
     state.preview.querySelector("#closeEmailPreview").addEventListener("click", () => {
@@ -213,36 +223,53 @@
     event.preventDefault();
     if (state.running) return;
 
-    const submit = state.modal.querySelector("#emailScanSubmit");
-    state.running = true;
-    submit.disabled = true;
-    submit.textContent = "Scanning...";
-
-    const payload = {
+    state.syncPayload = {
       provider: state.modal.querySelector("#emailScanProvider").value,
       access_token: state.modal.querySelector("#emailScanToken").value,
       query: state.modal.querySelector("#emailScanQuery").value,
       max_results: Number(state.modal.querySelector("#emailScanMax").value || 10)
     };
 
+    await scanOnce({ silent: false });
+    startPolling();
+  }
+
+  async function scanOnce({ silent }) {
+    const submit = state.modal.querySelector("#emailScanSubmit");
+    state.running = true;
+    submit.disabled = true;
+    submit.textContent = "Syncing...";
+
     try {
       const response = await fetch("/api/email/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(state.syncPayload)
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Email scan failed.");
+      if (!response.ok) throw new Error(result.detail || result.error || "Email scan failed.");
       closeModal();
       renderPreview(result);
-      showToast(`Read-only scan returned ${result.count} email source items.`);
+      if (window.LifeAdminDashboard?.addAgentDashboardUpdate) {
+        window.LifeAdminDashboard.addAgentDashboardUpdate(result);
+      }
+      if (!silent) {
+        showToast(`Email sync processed ${result.processed_count || 0} new update${result.processed_count === 1 ? "" : "s"}.`);
+      }
     } catch (error) {
       showToast(error.message || "Email scan failed.");
     } finally {
       state.running = false;
       submit.disabled = false;
-      submit.textContent = "Scan inbox";
+      submit.textContent = state.pollTimer ? "Sync running" : "Start sync";
     }
+  }
+
+  function startPolling() {
+    if (state.pollTimer) window.clearInterval(state.pollTimer);
+    state.pollTimer = window.setInterval(() => {
+      if (!state.running && state.syncPayload) scanOnce({ silent: true });
+    }, 60000);
   }
 
   function escapeHtml(value) {

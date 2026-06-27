@@ -359,27 +359,36 @@ function priorityTag(priority, type) {
   return `<span class="tag ${priority} ${reviewClass}">${priority}</span>`;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function renderQueue() {
   const cards = visibleItems().map((item) => `
-    <article class="item-card ${item.status === "done" ? "done" : ""}" data-id="${item.id}">
+    <article class="item-card ${item.status === "done" ? "done" : ""}" data-id="${escapeHtml(item.id)}">
       <div class="item-type" aria-hidden="true">${typeIcon[item.type]}</div>
       <div class="item-main">
         <div class="item-meta">
           <span>${typeLabel[item.type]}</span>
-          <span>${item.time}</span>
+          <span>${escapeHtml(item.time)}</span>
           <span>${Math.round(item.confidence * 100)}% confidence</span>
         </div>
-        <h3>${item.title}</h3>
+        <h3>${escapeHtml(item.title)}</h3>
         <div class="item-source">
           ${priorityTag(item.priority, item.type)}
-          <span class="tag">${item.source}</span>
-          <span class="tag">${item.owner}</span>
+          <span class="tag">${escapeHtml(item.source)}</span>
+          <span class="tag">${escapeHtml(item.owner)}</span>
         </div>
       </div>
       <div class="item-actions">
-        <button class="icon-button" data-action="inspect" data-id="${item.id}" title="Inspect item">i</button>
-        <button class="icon-button" data-action="approve" data-id="${item.id}" title="Mark reviewed">v</button>
-        <button class="icon-button" data-action="dismiss" data-id="${item.id}" title="Dismiss">x</button>
+        <button class="icon-button" data-action="inspect" data-id="${escapeHtml(item.id)}" title="Inspect item">i</button>
+        <button class="icon-button" data-action="approve" data-id="${escapeHtml(item.id)}" title="Mark reviewed">v</button>
+        <button class="icon-button" data-action="dismiss" data-id="${escapeHtml(item.id)}" title="Dismiss">x</button>
       </div>
     </article>
   `).join("");
@@ -425,9 +434,9 @@ function renderFocusStack() {
     const section = focusData[kind];
     const sectionItems = section.items();
     const rows = sectionItems.map((entry) => `
-      <button class="compact-item text-button" ${entry.id ? `data-action="inspect" data-id="${entry.id}"` : `data-note="${entry.title}"`}>
-        <strong>${entry.title}</strong>
-        <span>${entry.detail}</span>
+      <button class="compact-item text-button" ${entry.id ? `data-action="inspect" data-id="${escapeHtml(entry.id)}"` : `data-note="${escapeHtml(entry.title)}"`}>
+        <strong>${escapeHtml(entry.title)}</strong>
+        <span>${escapeHtml(entry.detail)}</span>
       </button>
     `).join("");
 
@@ -491,19 +500,19 @@ function inspectItem(id) {
   closeSettings();
   drawerContent.innerHTML = `
     <p class="eyebrow">${typeLabel[item.type]}</p>
-    <h2>${item.title}</h2>
+    <h2>${escapeHtml(item.title)}</h2>
     <div class="item-source">
       ${priorityTag(item.priority, item.type)}
-      <span class="tag">${item.source}</span>
-      <span class="tag">${item.owner}</span>
+      <span class="tag">${escapeHtml(item.source)}</span>
+      <span class="tag">${escapeHtml(item.owner)}</span>
     </div>
     <div class="drawer-block">
       <h3>Source Summary</h3>
-      <p>${item.summary}</p>
+      <p>${escapeHtml(item.summary)}</p>
     </div>
     <div class="drawer-block">
       <h3>Suggested Next Step</h3>
-      <p>${item.next}</p>
+      <p>${escapeHtml(item.next)}</p>
     </div>
     <div class="drawer-block">
       <h3>Confidence</h3>
@@ -512,12 +521,62 @@ function inspectItem(id) {
       </div>
     </div>
     <div class="drawer-block item-actions">
-      <button class="secondary-button" data-action="approve" data-id="${item.id}">Mark reviewed</button>
-      <button class="text-button" data-action="dismiss" data-id="${item.id}">Dismiss</button>
+      <button class="secondary-button" data-action="approve" data-id="${escapeHtml(item.id)}">Mark reviewed</button>
+      <button class="text-button" data-action="dismiss" data-id="${escapeHtml(item.id)}">Dismiss</button>
     </div>
   `;
   drawer.classList.add("open");
 }
+
+function addAgentDashboardUpdate(update) {
+  const incomingItems = Array.isArray(update.dashboard_items) ? update.dashboard_items : [];
+  const incomingNews = Array.isArray(update.dashboard_news) ? update.dashboard_news : [];
+  const existingIds = new Set(items.map((item) => item.id));
+
+  incomingItems.forEach((item) => {
+    if (!item || existingIds.has(item.id)) return;
+    const normalized = {
+      id: String(item.id),
+      type: ["task", "meeting", "needs_review"].includes(item.type) ? item.type : "task",
+      title: String(item.title || "Email item"),
+      owner: String(item.owner || "Email"),
+      source: String(item.source || "Email"),
+      time: String(item.time || "From email"),
+      createdAt: String(item.createdAt || todayIso),
+      dueAt: String(item.dueAt || item.createdAt || todayIso),
+      priority: ["low", "medium", "high"].includes(item.priority) ? item.priority : "medium",
+      confidence: Number.isFinite(Number(item.confidence)) ? Number(item.confidence) : 0,
+      summary: String(item.summary || ""),
+      next: String(item.next || "Review the source email."),
+      status: "open"
+    };
+
+    items.unshift(normalized);
+    existingIds.add(normalized.id);
+
+    if (normalized.type === "meeting") {
+      meetings.unshift({
+        title: normalized.title,
+        detail: `${normalized.time} - ${normalized.next}`
+      });
+    }
+  });
+
+  incomingNews.forEach((story) => {
+    if (!story) return;
+    news.unshift({
+      title: String(story.title || "Email update"),
+      detail: String(story.detail || "")
+    });
+  });
+
+  renderQueue();
+  showToast(`Dashboard updated from ${incomingItems.length + incomingNews.length} email item${incomingItems.length + incomingNews.length === 1 ? "" : "s"}.`);
+}
+
+window.LifeAdminDashboard = {
+  addAgentDashboardUpdate
+};
 
 function showToast(message) {
   clearTimeout(toastTimer);
@@ -962,10 +1021,6 @@ document.querySelectorAll(".toggle-row input").forEach((input) => {
   input.addEventListener("change", () => {
     showToast("Preference saved.");
   });
-});
-
-document.querySelector("#runAgentBtn").addEventListener("click", () => {
-  showToast("Read-only scan complete: 4 actions, 3 meeting notes, 3 news summaries.");
 });
 
 setTheme(activeTheme);

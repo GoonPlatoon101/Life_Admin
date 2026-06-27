@@ -65,6 +65,26 @@ class EmailCrawlToolsTest(unittest.TestCase):
         self.assertIn("Please send the budget by Friday.", source_item["content"])
         self.assertEqual(source_item["metadata"]["from"]["email"], "ava@example.com")
         self.assertIn("Authorization", http.headers[0])
+        self.assertEqual(http.headers[0]["Authorization"], "Bearer token")
+
+    def test_crawl_google_messages_accepts_pasted_bearer_token(self) -> None:
+        http = FakeHttpClient(
+            {
+                "/users/me/messages?": {
+                    "messages": [],
+                },
+            }
+        )
+
+        crawl_email_messages(
+            provider="google",
+            access_token="Bearer pasted-token",
+            query="newer_than:7d",
+            max_results=10,
+            http_client=http,
+        )
+
+        self.assertEqual(http.headers[0]["Authorization"], "Bearer pasted-token")
 
     def test_get_outlook_message_returns_source_item_with_attachments(self) -> None:
         http = FakeHttpClient(

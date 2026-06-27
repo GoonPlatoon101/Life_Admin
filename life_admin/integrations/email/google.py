@@ -21,7 +21,7 @@ GMAIL_API_BASE_URL = "https://gmail.googleapis.com/gmail/v1"
 
 class GoogleEmailCrawler:
     def __init__(self, access_token: str, http_client: HttpClient | None = None) -> None:
-        self.access_token = access_token
+        self.access_token = _normalize_access_token(access_token)
         self.http_client = http_client or UrlLibHttpClient()
 
     def list_messages(self, search: EmailSearchQuery) -> EmailPage:
@@ -146,4 +146,11 @@ def _optional_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _normalize_access_token(value: str) -> str:
+    token = value.strip()
+    if token.lower().startswith("bearer "):
+        return token[7:].strip()
+    return token
 

@@ -8,12 +8,22 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
+from agent import Agent
+from config import load_config
+from life_admin.integrations.email.http import EmailProviderError
+from life_admin.scanner.email_agent_runner import (
+    dashboard_update_from_agent_results,
+    process_email_source_items,
+)
 from life_admin.scanner import EmailScanRequest, scan_email_messages
+from llm_service import create_client
+from prompts import build_system_prompt
 
 
 HOST = "127.0.0.1"
 PORT = 8000
 ROOT = Path(__file__).resolve().parent
+SEEN_EMAIL_KEYS: set[str] = set()
 
 
 class LifeAdminHandler(BaseHTTPRequestHandler):
@@ -48,8 +58,39 @@ class LifeAdminHandler(BaseHTTPRequestHandler):
             )
             _validate_scan_request(request)
             result = scan_email_messages(request)
+            try:
+                agent = _build_agent()
+                agent_results = process_email_source_items(
+                    agent,
+                    result["source_items"],
+                    seen_keys=SEEN_EMAIL_KEYS,
+                )
+            except Exception as exc:
+                self._send_json(
+                    {
+                        "error": "Agent processing failed after email scan succeeded.",
+                        "detail": str(exc) or exc.__class__.__name__,
+                        "provider": result["provider"],
+                        "source_items": result["source_items"],
+                        "count": result["count"],
+                    },
+                    status=HTTPStatus.BAD_GATEWAY,
+                )
+                return
+            result = {
+                **result,
+                "agent_results": agent_results,
+                "processed_count": len(agent_results),
+                **dashboard_update_from_agent_results(agent_results),
+            }
         except ValueError as exc:
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+        except EmailProviderError as exc:
+            self._send_json(
+                {"error": "Email provider request failed.", "detail": str(exc)},
+                status=HTTPStatus.BAD_GATEWAY,
+            )
             return
         except Exception as exc:
             self._send_json(
@@ -114,6 +155,15 @@ def _validate_scan_request(request: EmailScanRequest) -> None:
         raise ValueError("provider must be either 'google' or 'outlook'.")
     if not request.access_token:
         raise ValueError("access_token is required.")
+
+
+def _build_agent() -> Agent:
+    config = load_config(ROOT)
+    return Agent(
+        config=config,
+        client=create_client(config),
+        system_prompt=build_system_prompt(config),
+    )
 
 
 def main() -> None:
