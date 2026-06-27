@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LifeAdmin Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">LA</span>
+          <div>
+            <strong>LifeAdmin</strong>
+            <span>Review-first assistant</span>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <button class="nav-item active" data-filter="all" title="Dashboard">
+            <span class="icon" aria-hidden="true">H</span>
+            <span>Dashboard</span>
+          </button>
+          <button class="nav-item" data-action="open-settings" title="Settings">
+            <span class="icon" aria-hidden="true">S</span>
+            <span>Settings</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-calendar">
+          <div class="calendar-head">
+            <div>
+              <span>Calendar</span>
+              <strong id="calendarMonthLabel">June 2026</strong>
+            </div>
+            <div class="calendar-controls">
+              <button class="calendar-nav" id="prevMonthBtn" type="button" title="Previous month">&lt;</button>
+              <button class="calendar-nav" id="nextMonthBtn" type="button" title="Next month">&gt;</button>
+            </div>
+          </div>
+          <div class="calendar-selectors">
+            <select id="calendarMonthSelect" aria-label="Calendar month"></select>
+            <input id="calendarYearInput" type="number" min="2000" max="2100" aria-label="Calendar year" />
+          </div>
+          <div class="calendar-weekdays" aria-hidden="true">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid" aria-label="Due date heatmap"></div>
+          <div class="calendar-footer">
+            <span id="calendarSelectionLabel">Today</span>
+            <div class="heat-legend" aria-label="Heatmap intensity">
+              <i></i><i></i><i></i><i></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="source-card">
+          <div class="source-header">
+            <span>Connected Sources</span>
+            <span class="status-dot"></span>
+          </div>
+          <div class="source-row"><span>Gmail</span><strong id="gmailSourceCount">32</strong></div>
+          <div class="source-row"><span>Outlook</span><strong id="outlookSourceCount">18</strong></div>
+        </div>
+      </aside>
+
+      <main class="dashboard">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Today, 27 Jun</p>
+            <h1>What needs attention</h1>
+          </div>
+          <div class="topbar-actions">
+            <label class="search">
+              <span aria-hidden="true">S</span>
+              <input id="searchInput" type="search" placeholder="Search tasks, people, sources" />
+            </label>
+            <button class="primary-button" id="runAgentBtn">Run read-only scan</button>
+          </div>
+        </header>
+
+        <section class="metric-grid" aria-label="Dashboard summary">
+          <button class="metric" data-metric-filter="outstanding" type="button">
+            <span>Outstanding tasks</span>
+            <strong id="taskCount">0</strong>
+            <small>open action items</small>
+          </button>
+          <button class="metric" data-metric-filter="due_today" type="button">
+            <span>Due today</span>
+            <strong id="dueTodayCount">0</strong>
+            <small>needs attention before EOD</small>
+          </button>
+          <button class="metric" data-metric-filter="weekly_meetings" type="button">
+            <span>This weeks meetings</span>
+            <strong id="weeklyMeetingCount">0</strong>
+            <small>scheduled syncs and prep</small>
+          </button>
+          <button class="metric urgent" data-metric-filter="review_required" type="button">
+            <span>Review required</span>
+            <strong id="reviewCount">0</strong>
+            <small>low confidence or missing context</small>
+          </button>
+        </section>
+
+        <section class="workbench">
+          <div class="panel action-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Priority Queue</p>
+                <h2>Suggested actions</h2>
+              </div>
+              <div class="segmented" aria-label="Filter actions">
+                <button class="segment active" data-filter="all">All</button>
+                <button class="segment" data-filter="task">Tasks</button>
+                <button class="segment" data-filter="meeting">Meetings</button>
+                <button class="segment" data-filter="needs_review">Review</button>
+              </div>
+            </div>
+            <div class="queue-filters" aria-label="Queue filters">
+              <div class="filter-field filter-popover" data-date-menu="created">
+                <span>Date created</span>
+                <button class="filter-trigger" data-action="toggle-date-menu" data-menu="created" type="button">
+                  <strong id="createdDateLabel">Any date</strong>
+                </button>
+                <div class="date-menu" id="createdDateMenu">
+                  <label class="date-menu-field">
+                    <span>From</span>
+                    <div class="date-input-row">
+                      <input id="createdFromFilter" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" />
+                      <input class="calendar-input" data-calendar-target="createdFromFilter" type="date" title="Pick created from date" />
+                    </div>
+                  </label>
+                  <label class="date-menu-field">
+                    <span>To</span>
+                    <div class="date-input-row">
+                      <input id="createdToFilter" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" />
+                      <input class="calendar-input" data-calendar-target="createdToFilter" type="date" title="Pick created to date" />
+                    </div>
+                  </label>
+                </div>
+              </div>
+              <div class="filter-field filter-popover" data-date-menu="due">
+                <span>Date due</span>
+                <button class="filter-trigger" data-action="toggle-date-menu" data-menu="due" type="button">
+                  <strong id="dueDateLabel">Any date</strong>
+                </button>
+                <div class="date-menu" id="dueDateMenu">
+                  <label class="date-menu-field">
+                    <span>From</span>
+                    <div class="date-input-row">
+                      <input id="dueFromFilter" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" />
+                      <input class="calendar-input" data-calendar-target="dueFromFilter" type="date" title="Pick due from date" />
+                    </div>
+                  </label>
+                  <label class="date-menu-field">
+                    <span>To</span>
+                    <div class="date-input-row">
+                      <input id="dueToFilter" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" />
+                      <input class="calendar-input" data-calendar-target="dueToFilter" type="date" title="Pick due to date" />
+                    </div>
+                  </label>
+                </div>
+              </div>
+              <label class="filter-field">
+                <span>Priority</span>
+                <div class="select-shell">
+                  <select id="priorityFilter">
+                    <option value="all">Any priority</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+              </label>
+              <button class="reset-filters" id="resetFiltersBtn" type="button" title="Reset filters" aria-label="Reset filters">↶</button>
+            </div>
+            <div class="queue-list" id="queueList"></div>
+          </div>
+
+          <div class="panel insight-panel">
+            <div class="panel-heading compact">
+              <div>
+                <p class="eyebrow">Today Stack</p>
+                <h2>Reorder focus blocks</h2>
+              </div>
+              <div class="stack-settings">
+                <button class="settings-button" id="stackSettingsBtn" title="Stack settings">...</button>
+                <div class="stack-menu" id="stackMenu"></div>
+              </div>
+            </div>
+            <div class="focus-stack" id="focusStack" aria-label="Reorderable dashboard sections"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <aside class="drawer" id="detailDrawer" aria-live="polite" aria-label="Selected item details">
+      <button class="drawer-close" id="closeDrawer" title="Close details">x</button>
+      <div id="drawerContent" class="drawer-content">
+        <p class="empty-state">Select an item to inspect the source, confidence, and suggested next step.</p>
+      </div>
+    </aside>
+
+    <aside class="settings-panel" id="settingsPanel" aria-label="Application settings">
+      <button class="drawer-close" id="closeSettings" title="Close settings">x</button>
+      <div class="settings-content">
+        <p class="eyebrow">Workspace Settings</p>
+        <h2>Personalize LifeAdmin</h2>
+
+        <section class="settings-section">
+          <div class="settings-section-head">
+            <h3>Appearance</h3>
+            <span>Display mode</span>
+          </div>
+          <div class="theme-options" aria-label="Theme">
+            <button class="theme-option active" data-theme-option="light" type="button">Light</button>
+            <button class="theme-option" data-theme-option="dark" type="button">Dark</button>
+            <button class="theme-option" data-theme-option="system" type="button">System</button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-section-head">
+            <h3>Time & Region</h3>
+            <span>Used for deadlines and digests</span>
+          </div>
+          <div class="settings-grid">
+            <label class="settings-field">
+              <span>Region</span>
+              <select id="regionSelect">
+                <option>Singapore</option>
+                <option>United States</option>
+                <option>United Kingdom</option>
+                <option>India</option>
+              </select>
+            </label>
+            <label class="settings-field">
+              <span>Timezone</span>
+              <select id="timezoneSelect">
+                <option value="Asia/Singapore">Asia/Singapore</option>
+                <option value="America/New_York">America/New_York</option>
+                <option value="Europe/London">Europe/London</option>
+                <option value="Asia/Kolkata">Asia/Kolkata</option>
+              </select>
+            </label>
+            <label class="settings-field">
+              <span>Workday starts</span>
+              <input id="workdayStart" type="time" value="09:00" />
+            </label>
+            <label class="settings-field">
+              <span>Daily digest</span>
+              <input id="digestTime" type="time" value="08:30" />
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-section-head">
+            <h3>Agent Behavior</h3>
+            <span>Review-first controls</span>
+          </div>
+          <label class="range-field">
+            <span>Confidence threshold <strong id="confidenceValue">85%</strong></span>
+            <input id="confidenceThreshold" type="range" min="50" max="95" value="85" />
+          </label>
+          <div class="toggle-list">
+            <label class="toggle-row">
+              <input id="requireReviewToggle" type="checkbox" checked />
+              <span>Require approval before external actions</span>
+            </label>
+            <label class="toggle-row">
+              <input id="lowConfidenceToggle" type="checkbox" checked />
+              <span>Send low-confidence items to Review required</span>
+            </label>
+            <label class="toggle-row">
+              <input id="newsletterToggle" type="checkbox" checked />
+              <span>Include newsletters in News Feed</span>
+            </label>
+            <label class="toggle-row">
+              <input id="meetingPrepToggle" type="checkbox" checked />
+              <span>Generate meeting preparation notes</span>
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-section-head">
+            <h3>Account Links</h3>
+            <span>Read-only demo connections</span>
+          </div>
+          <div class="account-list">
+            <div class="account-row" data-account="gmail">
+              <div><strong>Gmail</strong><span>Read emails and threads</span></div>
+              <button class="secondary-button" data-action="toggle-account" data-account="gmail">Connected</button>
+            </div>
+            <div class="account-row" data-account="outlook">
+              <div><strong>Outlook</strong><span>Read inbox, calendar invites, and threads</span></div>
+              <button class="secondary-button" data-action="toggle-account" data-account="outlook">Connected</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-section-head">
+            <h3>Notifications & Privacy</h3>
+            <span>Demo-safe defaults</span>
+          </div>
+          <div class="settings-grid">
+            <label class="settings-field">
+              <span>Notification channel</span>
+              <select data-setting-toast="Notification channel saved.">
+                <option>In-app only</option>
+                <option>Email digest</option>
+                <option>Calendar reminder</option>
+              </select>
+            </label>
+            <label class="settings-field">
+              <span>Data retention</span>
+              <select data-setting-toast="Data retention saved.">
+                <option>30 days</option>
+                <option>90 days</option>
+                <option>Until manually cleared</option>
+              </select>
+            </label>
+            <label class="settings-field">
+              <span>Quiet hours start</span>
+              <input data-setting-toast="Quiet hours saved." type="time" value="19:00" />
+            </label>
+            <label class="settings-field">
+              <span>Quiet hours end</span>
+              <input data-setting-toast="Quiet hours saved." type="time" value="08:00" />
+            </label>
+          </div>
+          <div class="toggle-list">
+            <label class="toggle-row">
+              <input type="checkbox" checked />
+              <span>Mask personal details in demo mode</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" checked />
+              <span>Keep all integrations read-only by default</span>
+            </label>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
