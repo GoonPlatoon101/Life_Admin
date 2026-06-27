@@ -180,7 +180,6 @@ const resetFiltersBtn = document.querySelector("#resetFiltersBtn");
 const createdDateLabel = document.querySelector("#createdDateLabel");
 const dueDateLabel = document.querySelector("#dueDateLabel");
 const calendarGrid = document.querySelector("#calendarGrid");
-const calendarSelectionLabel = document.querySelector("#calendarSelectionLabel");
 const calendarMonthLabel = document.querySelector("#calendarMonthLabel");
 const calendarMonthSelect = document.querySelector("#calendarMonthSelect");
 const calendarYearInput = document.querySelector("#calendarYearInput");
@@ -322,7 +321,6 @@ function renderCalendar() {
 
   calendarGrid.innerHTML = days.join("");
   calendarMonthLabel.textContent = `${monthNames[calendarMonth]} ${calendarYear}`;
-  calendarSelectionLabel.textContent = selectedCalendarDate ? `Selected ${formatDate(selectedCalendarDate)}` : "No date selected";
   calendarMonthSelect.value = String(calendarMonth);
   calendarYearInput.value = String(calendarYear);
 }
@@ -791,6 +789,28 @@ document.addEventListener("click", (event) => {
       openDateMenu = null;
       renderDateMenus();
     }
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+
+  if (openDateMenu) {
+    openDateMenu = null;
+    renderDateMenus();
+  }
+
+  if (stackMenuOpen) {
+    stackMenuOpen = false;
+    renderStackMenu();
+  }
+
+  if (settingsPanel.classList.contains("open")) {
+    closeSettings();
+  }
+
+  if (drawer.classList.contains("open")) {
+    drawer.classList.remove("open");
   }
 });
 
