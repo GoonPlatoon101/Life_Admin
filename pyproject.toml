@@ -1,0 +1,38 @@
+[project]
+name = "lifeadmin"
+version = "0.1.0"
+description = "AI-powered admin dashboard that turns scattered email and calendar data into clear, reviewable action items."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # Pin concrete versions when the first real code lands.
+    # Suggested starting points (uncomment as needed):
+    # "fastapi",
+    # "uvicorn[standard]",
+    # "pydantic>=2",
+    # "pydantic-settings",
+    # "sqlalchemy>=2",
+    # "alembic",
+    # "python-dotenv",
+    # "anthropic",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["lifeadmin*", "app*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
