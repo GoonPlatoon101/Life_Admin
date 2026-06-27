@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Iterable, MutableSet
+from typing import TYPE_CHECKING, Any, Iterable, MutableSet
 
-from agent import Agent
 from schemas import SourceItem
+
+if TYPE_CHECKING:
+    from agent import Agent
 
 
 def email_source_key(source_item: dict[str, Any]) -> str:

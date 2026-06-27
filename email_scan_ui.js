@@ -3,8 +3,8 @@
     modal: null,
     preview: null,
     running: false,
-    syncPayload: null,
-    pollTimer: null
+    processing: false,
+    lastScanResult: null
   };
 
   function installStyles() {
@@ -138,13 +138,13 @@
           </label>
           <label class="email-scan-field">
             <span>Max messages</span>
-            <input id="emailScanMax" type="number" min="1" max="25" value="10" />
+            <input id="emailScanMax" type="number" min="1" max="25" value="5" />
           </label>
-          <p class="empty-state">The token is sent only to the local scanner endpoint and is not passed to the agent.</p>
+          <p class="empty-state">The token is sent only to the local scanner endpoint. AI processing happens in a separate step after the scan preview.</p>
         </div>
         <div class="email-scan-actions">
           <button class="text-button" type="button" data-email-scan-close>Cancel</button>
-          <button class="primary-button" id="emailScanSubmit" type="submit">Start sync</button>
+          <button class="primary-button" id="emailScanSubmit" type="submit">Scan inbox</button>
         </div>
       </form>
     `;
@@ -185,7 +185,40 @@
     window.setTimeout(() => toast.classList.remove("show"), 2400);
   }
 
-  function renderPreview(result) {
+  function renderScanPreview(result) {
+    const items = result.source_items || [];
+    const rows = items.map((item) => `
+      <article class="email-source-card">
+        <strong>${escapeHtml(item.title || "(no subject)")}</strong>
+        <span>${escapeHtml(item.provider || result.provider)} - ${escapeHtml(item.source_id || "")}</span>
+        <span>${escapeHtml((item.content || "").slice(0, 220))}</span>
+      </article>
+    `).join("");
+
+    state.preview.innerHTML = `
+      <div class="email-scan-head">
+        <div>
+          <p class="eyebrow">Scanner result</p>
+          <h2>${items.length} email source items</h2>
+        </div>
+        <div class="email-scan-actions">
+          <button class="secondary-button" type="button" id="processEmailPreview"${items.length ? "" : " disabled"}>Process with AI</button>
+          <button class="drawer-close" type="button" id="closeEmailPreview" title="Close">x</button>
+        </div>
+      </div>
+      ${rows || '<p class="empty-state">No email messages matched this scan.</p>'}
+    `;
+    state.preview.classList.add("open");
+    state.preview.querySelector("#closeEmailPreview").addEventListener("click", () => {
+      state.preview.classList.remove("open");
+    });
+    const processButton = state.preview.querySelector("#processEmailPreview");
+    if (processButton) {
+      processButton.addEventListener("click", processScannedEmails);
+    }
+  }
+
+  function renderProcessedPreview(result) {
     const items = result.dashboard_items || [];
     const stories = result.dashboard_news || [];
     const rows = items.map((item) => `
@@ -202,16 +235,17 @@
         <span>${escapeHtml((story.detail || "").slice(0, 220))}</span>
       </article>
     `).join("");
+    const processedRows = rows + newsRows;
 
     state.preview.innerHTML = `
       <div class="email-scan-head">
         <div>
-          <p class="eyebrow">Email agent result</p>
-          <h2>${result.processed_count || 0} new email updates processed</h2>
+          <p class="eyebrow">AI processing result</p>
+          <h2>${result.processed_count || 0} email updates processed</h2>
         </div>
         <button class="drawer-close" type="button" id="closeEmailPreview" title="Close">x</button>
       </div>
-      ${rows || newsRows ? rows + newsRows : '<p class="empty-state">No new email updates matched this sync.</p>'}
+      ${processedRows || '<p class="empty-state">No new dashboard items were created from this scan.</p>'}
     `;
     state.preview.classList.add("open");
     state.preview.querySelector("#closeEmailPreview").addEventListener("click", () => {
@@ -223,53 +257,71 @@
     event.preventDefault();
     if (state.running) return;
 
-    state.syncPayload = {
+    const payload = {
       provider: state.modal.querySelector("#emailScanProvider").value,
       access_token: state.modal.querySelector("#emailScanToken").value,
       query: state.modal.querySelector("#emailScanQuery").value,
-      max_results: Number(state.modal.querySelector("#emailScanMax").value || 10)
+      max_results: Number(state.modal.querySelector("#emailScanMax").value || 5)
     };
 
-    await scanOnce({ silent: false });
-    startPolling();
-  }
-
-  async function scanOnce({ silent }) {
     const submit = state.modal.querySelector("#emailScanSubmit");
     state.running = true;
     submit.disabled = true;
-    submit.textContent = "Syncing...";
+    submit.textContent = "Scanning...";
 
     try {
       const response = await fetch("/api/email/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(state.syncPayload)
+        body: JSON.stringify(payload)
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.detail || result.error || "Email scan failed.");
       closeModal();
-      renderPreview(result);
-      if (window.LifeAdminDashboard?.addAgentDashboardUpdate) {
-        window.LifeAdminDashboard.addAgentDashboardUpdate(result);
-      }
-      if (!silent) {
-        showToast(`Email sync processed ${result.processed_count || 0} new update${result.processed_count === 1 ? "" : "s"}.`);
-      }
+      state.lastScanResult = result;
+      renderScanPreview(result);
+      showToast(`Read-only scan returned ${result.count} email source item${result.count === 1 ? "" : "s"}.`);
     } catch (error) {
       showToast(error.message || "Email scan failed.");
     } finally {
       state.running = false;
       submit.disabled = false;
-      submit.textContent = state.pollTimer ? "Sync running" : "Start sync";
+      submit.textContent = "Scan inbox";
     }
   }
 
-  function startPolling() {
-    if (state.pollTimer) window.clearInterval(state.pollTimer);
-    state.pollTimer = window.setInterval(() => {
-      if (!state.running && state.syncPayload) scanOnce({ silent: true });
-    }, 60000);
+  async function processScannedEmails() {
+    if (state.processing || !state.lastScanResult?.source_items?.length) return;
+
+    const processButton = state.preview.querySelector("#processEmailPreview");
+    state.processing = true;
+    if (processButton) {
+      processButton.disabled = true;
+      processButton.textContent = "Processing...";
+    }
+
+    try {
+      const response = await fetch("/api/email/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_items: state.lastScanResult.source_items })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || result.error || "Email processing failed.");
+      renderProcessedPreview(result);
+      if (window.LifeAdminDashboard?.addAgentDashboardUpdate) {
+        window.LifeAdminDashboard.addAgentDashboardUpdate(result);
+      }
+      showToast(`AI processed ${result.processed_count || 0} email update${result.processed_count === 1 ? "" : "s"}.`);
+    } catch (error) {
+      showToast(error.message || "Email processing failed.");
+      if (processButton) {
+        processButton.disabled = false;
+        processButton.textContent = "Process with AI";
+      }
+    } finally {
+      state.processing = false;
+    }
   }
 
   function escapeHtml(value) {

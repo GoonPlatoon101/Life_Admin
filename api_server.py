@@ -8,16 +8,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
-from agent import Agent
-from config import load_config
 from life_admin.integrations.email.http import EmailProviderError
+from life_admin.scanner import EmailScanRequest, scan_email_messages
 from life_admin.scanner.email_agent_runner import (
     dashboard_update_from_agent_results,
     process_email_source_items,
 )
-from life_admin.scanner import EmailScanRequest, scan_email_messages
-from llm_service import create_client
-from prompts import build_system_prompt
 
 
 HOST = "127.0.0.1"
@@ -43,10 +39,15 @@ class LifeAdminHandler(BaseHTTPRequestHandler):
         self.wfile.write(path.read_bytes())
 
     def do_POST(self) -> None:
-        if self.path != "/api/email/scan":
-            self._send_json({"error": "Not found."}, status=HTTPStatus.NOT_FOUND)
+        if self.path == "/api/email/scan":
+            self._handle_scan()
             return
+        if self.path == "/api/email/process":
+            self._handle_process()
+            return
+        self._send_json({"error": "Not found."}, status=HTTPStatus.NOT_FOUND)
 
+    def _handle_scan(self) -> None:
         try:
             payload = self._read_json()
             request = EmailScanRequest(
@@ -58,31 +59,6 @@ class LifeAdminHandler(BaseHTTPRequestHandler):
             )
             _validate_scan_request(request)
             result = scan_email_messages(request)
-            try:
-                agent = _build_agent()
-                agent_results = process_email_source_items(
-                    agent,
-                    result["source_items"],
-                    seen_keys=SEEN_EMAIL_KEYS,
-                )
-            except Exception as exc:
-                self._send_json(
-                    {
-                        "error": "Agent processing failed after email scan succeeded.",
-                        "detail": str(exc) or exc.__class__.__name__,
-                        "provider": result["provider"],
-                        "source_items": result["source_items"],
-                        "count": result["count"],
-                    },
-                    status=HTTPStatus.BAD_GATEWAY,
-                )
-                return
-            result = {
-                **result,
-                "agent_results": agent_results,
-                "processed_count": len(agent_results),
-                **dashboard_update_from_agent_results(agent_results),
-            }
         except ValueError as exc:
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
             return
@@ -101,9 +77,40 @@ class LifeAdminHandler(BaseHTTPRequestHandler):
 
         self._send_json(result)
 
+    def _handle_process(self) -> None:
+        try:
+            payload = self._read_json()
+            source_items = _validated_source_items(payload.get("source_items"))
+            if not source_items:
+                raise ValueError("source_items must contain at least one scanned email.")
+
+            agent = _build_agent()
+            agent_results = process_email_source_items(
+                agent,
+                source_items,
+                seen_keys=SEEN_EMAIL_KEYS,
+            )
+            result = {
+                "source_items": source_items,
+                "agent_results": agent_results,
+                "processed_count": len(agent_results),
+                **dashboard_update_from_agent_results(agent_results),
+            }
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+        except Exception as exc:
+            self._send_json(
+                {"error": "Email processing failed.", "detail": str(exc)},
+                status=HTTPStatus.BAD_GATEWAY,
+            )
+            return
+
+        self._send_json(result)
+
     def log_message(self, format: str, *args: Any) -> None:
-        if self.path == "/api/email/scan":
-            print(f"{self.address_string()} - email scan request")
+        if self.path in {"/api/email/scan", "/api/email/process"}:
+            print(f"{self.address_string()} - {self.path}")
             return
         super().log_message(format, *args)
 
@@ -134,7 +141,6 @@ class LifeAdminHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-
 def _optional_str(value: Any) -> str | None:
     if value is None:
         return None
@@ -157,7 +163,23 @@ def _validate_scan_request(request: EmailScanRequest) -> None:
         raise ValueError("access_token is required.")
 
 
-def _build_agent() -> Agent:
+def _validated_source_items(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ValueError("source_items must be a JSON array.")
+    source_items: list[dict[str, Any]] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ValueError(f"source_items[{index}] must be an object.")
+        source_items.append(item)
+    return source_items
+
+
+def _build_agent():
+    from agent import Agent
+    from config import load_config
+    from llm_service import create_client
+    from prompts import build_system_prompt
+
     config = load_config(ROOT)
     return Agent(
         config=config,
